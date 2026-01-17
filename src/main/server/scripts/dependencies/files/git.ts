@@ -100,32 +100,46 @@ export async function install(
 		});
 		await new Promise<void>((resolve, reject) => {
 			https
-				.get(url, { headers: { "User-Agent": "Dione", family: 4, timeout: 30000, } }, (response) => {
-					if ([301, 302].includes(response.statusCode ?? 0)) {
-						const redirectUrl = response.headers.location;
-						if (redirectUrl) {
-							https
-								.get(redirectUrl, { headers: { "User-Agent": "Dione", family: 4, timeout: 30000, } }, (redirectResponse) => {
-									redirectResponse.pipe(installerFile);
-									installerFile.on("close", resolve);
-									installerFile.on("error", reject);
-								})
-								.on("error", reject);
+				.get(
+					url,
+					{ headers: { "User-Agent": "Dione", family: 4, timeout: 30000 } },
+					(response) => {
+						if ([301, 302].includes(response.statusCode ?? 0)) {
+							const redirectUrl = response.headers.location;
+							if (redirectUrl) {
+								https
+									.get(
+										redirectUrl,
+										{
+											headers: {
+												"User-Agent": "Dione",
+												family: 4,
+												timeout: 30000,
+											},
+										},
+										(redirectResponse) => {
+											redirectResponse.pipe(installerFile);
+											installerFile.on("close", resolve);
+											installerFile.on("error", reject);
+										},
+									)
+									.on("error", reject);
+							} else {
+								reject(new Error("Redirect URL not found"));
+							}
+						} else if (response.statusCode === 200) {
+							io.to(id).emit("installDep", {
+								type: "log",
+								content: `${depName} installer downloaded successfully`,
+							});
+							response.pipe(installerFile);
+							installerFile.on("close", resolve);
+							installerFile.on("error", reject);
 						} else {
-							reject(new Error("Redirect URL not found"));
+							reject(new Error(`HTTP ${response.statusCode}`));
 						}
-					} else if (response.statusCode === 200) {
-						io.to(id).emit("installDep", {
-							type: "log",
-							content: `${depName} installer downloaded successfully`,
-						});
-						response.pipe(installerFile);
-						installerFile.on("close", resolve);
-						installerFile.on("error", reject);
-					} else {
-						reject(new Error(`HTTP ${response.statusCode}`));
-					}
-				})
+					},
+				)
 				.on("error", reject);
 		});
 	} else {
